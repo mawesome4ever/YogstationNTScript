@@ -1,0 +1,22 @@
+def leaderboard(sig, args){
+    channel = sig.freq;
+    leaderString = "";
+    msgindex = 1;
+    serverData = mem("ServerInfo");
+    amountInIndex = length(serverData["leaderboardIndex"]);
+    while ( msgindex < amountInIndex) {
+        username = serverData["leaderboardIndex"][msgindex];
+        messages = serverData["leaderboardValue"][msgindex];
+        if( msgindex == 1){
+            leaderString += "["+username+":"+tostring(messages)+"]";  
+        } else {
+            leaderString += ", ["+username+":"+tostring(messages)+"]";
+        }
+        msgindex += 1;
+    }
+    content = "@"+sig.source+", here is the current leaderboard. Not yet sorted: "+leaderString;
+    NewSign = signal(content, channel, name);
+    NewSign.filters = list(filter_types.loud);
+    broadcast(NewSign);
+}
+mem("leaderboardDef", leaderboard);
