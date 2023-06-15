@@ -10,6 +10,7 @@ keys = list(
 	 "radioPinMsg", 
 	 "addShorthand", 
 	 "serverinfo",
+	 "leaderboard",
 	 "help");
 desc = list(
 			"Allows you to mimick any individual. First argument is the content of the message. Second argument is the name of the person to mimick. Third, their job name. Example: [ "+Suffix+"mim I Am the LAW![quote here]Bob Steele[quote here]Security Officer ]",
@@ -22,6 +23,7 @@ desc = list(
 			"Allows Command crew to pin a message, message is announced every X amount of seconds to remind crew members. Example remind crew to eat their vegetables every 5 seconds: [ "+Suffix+"radioPinMsg Eat your vegetables[quote here]5 ]. To remove a pinned message, simply type: [ "+Suffix+"radioPinMsg remove ]. Each command member can only pin one message.", 
 			"Allows you to quickly replace a word/sentence or symbol with another word/sentence or symbol, for example if you are being chased and want to call for help by typing [!!], you can set that with: [ "+Suffix+"addShorthand !![quote here]Help! I'm in danger! ]",
 			"Gives misc related server info, mainly used by Net Admin.",
+			"Shows a leaderboard of messages sent by these players",
 			"Sends you the command list. Also accepts one argument, the command you would like to learn more about. Example: [ "+Suffix+"help trig ]");
 //1-5 = Brute, 6-9 = burn, 10-16 = Suffocation, 17+ = Toxins
 symptom = list("Bleeding", "Bloodied clothing", "Bloodied limbs", "bleeding", "blood",
@@ -42,6 +44,8 @@ serverData = list(
 	"StartUptime" = time(), 
 	"MessagesProccessed" = 0, 
 	"ActiveServers" = list(), 
+	"leaderboardIndex" = list(),
+	"leaderboardValue" = list(),
 	"LastMessagesSentByusers" = list()
 	);
 savedServerInfo = mem("ServerInfo");
@@ -351,10 +355,10 @@ def serverinfo(sig, args) {
 	msgProc  = ServerData["MessagesProccessed"];
 	actServ  = ServerData["ActiveServers"];
 	lastUsrMsgs = ServerData["LastMessagesSentByusers"];
+	current = time();
 	if(timearg == "time" || timearg == " time"){
 		lastTime = ServerData["LastUpdate"] || 0;
 		if(lastTime > 0){
-			current = time();
 			differe = (current - lastTime) / 10;
 			remainder = differe % 3600;
 			minsDiff = floor(remainder / 60);
@@ -381,35 +385,35 @@ def serverinfo(sig, args) {
 	servIndex = 1;
 	while(msgindex < length(lastUsrMsgs) + 1) {
 		packet = lastUsrMsgs[msgindex];
-		if( length(packet) == 0){ continue; }
-		username = packet["user"];
-		msg = packet["msg"];
-		if(length(username) == 0){ continue; }
-		userString += ", "+username;
+		if( length(packet) > 0){ 
+			if(msgindex == 1){
+				userString += packet;	
+			}else{
+				userString += ", "+packet;
+			}
+		}
 		msgindex += 1;
 	}
 	while(servIndex < length(actServ) + 1) {
 		freq = actServ[servIndex];
 		if(length(freq) == 0){ continue; }
-		serverString += ", "+tostring(freq);
+		if( servIndex == 1 ) {
+			serverString += freq;
+		}else{
+			serverString += ", "+freq;
+		}
 		servIndex += 1;
 	}
-	content = "@"+sig.source+", Server Info... Start up time - ["+tostring(startUpT)+"]= ["+tostring(time() - startUpT)+"] Messages Proccessed ["+tostring(msgProc)+"] Channels that are active: ["+serverString+"] Last three messages sent by users: ["+userString+"]";
+	differe = (current - startUpT) / 10;
+	remainder = differe % 3600;
+	minsDiff = floor(remainder / 60);
+	secsDiff = (remainder % 60);
+	content = "@"+sig.source+", Server Info... Start up time - ["+tostring(startUpT)+"]= ["+tostring(minsDiff)+" minutes, "+secsDiff+" Seconds Ago] Messages Proccessed ["+tostring(msgProc)+"] Active Channels: ["+serverString+"] Last three msgs sent by users: ["+userString+"]";
 	NewSign = signal(content, channel, name);
 	NewSign.filters = list(filter_types.loud);
 	broadcast(NewSign);
 }
-def empty(sig, args) {
-	return sig;
-};
-def nanitecomms(sig, args, command){
-	channel = sig.freq;
-	messageIndex = find(keys, command);
-	content = "@"+sig.source+", "+desc[messageIndex];
-	NewSign = signal(content, channel, name);
-	NewSign.filters = list(filter_types.loud);
-	broadcast(NewSign);
-}
+
 def process_signal(sig){
 	channel = sig.freq;
 	// Fuck your ramblings, poly
@@ -417,13 +421,24 @@ def process_signal(sig){
         return;
     }
     serverData["MessagesProccessed"] += 1;
-	if(find(serverData["ActiveServers"], channel) == 0){
+	if(find(serverData["ActiveServers"], tostring(channel)) == 0){
 		serverData["ActiveServers"] += tostring(channel);
 	}
-	serverData["LastMessagesSentByusers"] = serverData["LastMessagesSentByusers"] || list();
-	serverData["LastMessagesSentByusers"] += list("user" = tostring(sig.source), "msg" = sig.content);
+	if(length(serverData["LastMessagesSentByusers"]) > 0){
+		serverData["LastMessagesSentByusers"] += list(sig.source);	
+	}else{
+		serverData["LastMessagesSentByusers"] = list(sig.source);	
+	}
+	playerFoundInleader = find(serverData["leaderboardIndex"], sig.source);
+	if(playerFoundInleader == 0){
+		serverData["leaderboardIndex"] += sig.source;
+		serverData["leaderboardValue"] += 1;
+	}else{
+		serverData["leaderboardValue"][playerFoundInleader] += 1;
+	}
+	
 	if( length(serverData["LastMessagesSentByusers"]) > 3 ){
-		newCopy = serverData["LastMessagesSentByusers"].Copy(length(serverData["LastMessagesSentByusers"]) - 3, length(serverData["LastMessagesSentByusers"]) + 1); 
+		newCopy = serverData["LastMessagesSentByusers"].Copy(length(serverData["LastMessagesSentByusers"]) - 3, length(serverData["LastMessagesSentByusers"])); 
 		serverData["LastMessagesSentByusers"] = newCopy;
 	}
 	mem("ServerInfo", serverData);
@@ -447,10 +462,10 @@ def process_signal(sig){
 		"pinnedrecipe" = pinnedrecipe, 
 		"pinrecipe" = pinrecipe, 
 		"recipe" = chems, 
-		"who" = empty, 
 		"radioPinMsg" = radioPinMsg, 
 		"addShorthand" = addShorthand, 
 		"help" = help,
+		"leaderboard" = mem("leaderboardDef"),
 		"serverinfo" = serverinfo
 		);
 	if ( length(CommandersWhoPinned) > 0 ){
@@ -494,4 +509,4 @@ def process_signal(sig){
 	return sig;
 };
 
-//New TCOMM commands! Type "..help" for more info!
+//Radio commands available to everyone! Type "..help" for more info!
